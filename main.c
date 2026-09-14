@@ -1,14 +1,22 @@
 #include <arpa/inet.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+#define INVALID_AF -1
+#define BAD_ADDR   0
 
 // propably overkill. just wanna be cool lol.
 #define ERRORS(T)                                                                                                                          \
     T(SOCK_DESC_ERR, "socket error: couldn't initialize file descriptor.")                                                                 \
     T(CONNECTION_FAIL, "couldn't connect to the destination")                                                                              \
     T(FS_ERR, "fs error: error reading file.")                                                                                             \
+    T(STAT_READ_ERR, "fs error: couldn't get file stat.")                                                                                  \
     T(ALLOC_ERR, "memory allocation failed.")                                                                                              \
     T(BAD_ARGS_ERR, "bad arguments.")                                                                                                      \
     T(DST_ADD_ERR, "specified address contains characters representing a non-valid address in the specified address family")               \
@@ -20,8 +28,13 @@ typedef enum
     ERRORS(T)
 #undef T
       NO_ERR = -1
-
 } terr_t;
+
+typedef struct
+{
+    uint32_t tf_name_len;
+    uint64_t tf_size;
+} tf_header_t;
 
 static terr_t terr = -1;
 const char   *err_msg[] = {
@@ -45,28 +58,30 @@ int main(int argc, char **argv)
         TFAIL(BAD_ARGS_ERR);
     }
 
+    struct stat file_stat;
+    tf_header_t file_header;
+
+    if (stat(argv[2], &file_stat))
+        TFAIL(STAT_READ_ERR);
 
     FILE *file = fopen(argv[2], "r");
     if (!file)
         TFAIL(FS_ERR);
 
-    fseek(file, 0, SEEK_END);  // maybe stat does the thing?
-    size_t fsize = ftell(file);
-    fseek(file, 0, SEEK_SET);
-
-    printf("file size: %zu\n", fsize);
+    file_header.tf_name_len = strlen(argv[2]);
+    file_header.tf_size = file_stat.st_size;
 
     int sd = socket(AF_INET, SOCK_STREAM, 0);
     if (sd == -1)
         TFAIL(SOCK_DESC_ERR);
 
-    struct sockaddr_in dst = { .sin_family = AF_INET, .sin_port = htons(12345) };
+    struct sockaddr_in dst_addr = { .sin_family = AF_INET, .sin_port = htons(12345) };
 
-    switch (inet_pton(AF_INET, "127.0.0.1", &dst.sin_addr))
+    switch (inet_pton(AF_INET, "127.0.0.1", &dst_addr.sin_addr))
     {
-        case -1:  // returned when `af` (arg 1) isn't a valid address family (skip for now)
+        case INVALID_AF:  // returned when `af` (arg 1) isn't a valid address family (skip for now)
             break;
-        case 0:
+        case BAD_ADDR:
             TFAIL(DST_ADD_ERR);
         case 1:
             break;
@@ -74,14 +89,23 @@ int main(int argc, char **argv)
             TFAIL(UNHANDLED_ERR);
     }
 
-    int connected = connect(sd, (struct sockaddr *)&dst, sizeof(dst));
-
-    if (connected)  // non-zero on error
+    if (connect(sd, (struct sockaddr *)&dst_addr, sizeof(dst_addr)))
         TFAIL(CONNECTION_FAIL);
 
+    printf("sending: name: %s (%d), size: %zu\n", argv[2], file_header.tf_name_len, file_header.tf_size);
+
+    send(sd, &file_header, sizeof(tf_header_t), 0);
+    send(sd, argv[2], file_header.tf_name_len, 0);
+
+    printf("closeing socket fd...\n");
+    close(sd);
+    printf("done.\n");
     return 0;
 
 exit:
+    if (sd > 0)
+        close(sd);
+
     dprintf(2, "exit: %s\n", err_msg[terr]);
     exit(1);
 }
