@@ -65,7 +65,7 @@ const char   *err_msg[] = {
         goto exit;                                                                                                                         \
     } while (0)
 
-// my first argument parser, dam it feels kinda tricky. inspired by raysan simple parser:
+// my first argument parser, dam it feels kinda tricky. inspired by raysan's simple parser:
 // https://github.com/raysan5/rfxgen/blob/3185a36277226243695169da1e0d8d4aedde6f50/src/rfxgen.c#L1125
 // error handling works, but sucks. i mean it is good, but the reporting sucks
 void process_args(int argc, char **argv, targs_t *targs)
