@@ -96,7 +96,16 @@ int main(int argc, char **argv)
     assert(sizeof(tf_header_t) == send(sd, &file_header, sizeof(tf_header_t), 0));
     assert(file_header.tf_name_len == send(sd, argv[2], file_header.tf_name_len, 0));
 
-    printf("closeing socket fd...\n");
+    char buf[1024] = { 0 };
+
+    for (size_t i = 0; i < (file_stat.st_size / _Countof(buf)) + 1; i++)
+    {
+        int read_count = fread(buf, 1, _Countof(buf), file);
+        assert(read_count == send(sd, buf, read_count, 0));
+    }
+
+    printf("closing socket fd...\n");
+    fclose(file);
     close(sd);
     printf("done.\n");
     return 0;
