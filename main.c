@@ -1,6 +1,5 @@
 #include <arpa/inet.h>
-#include <stddef.h>
-#include <stdint.h>
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,9 +13,9 @@
 // propably overkill. just wanna be cool lol.
 #define ERRORS(T)                                                                                                                          \
     T(SOCK_DESC_ERR, "socket error: couldn't initialize file descriptor.")                                                                 \
-    T(CONNECTION_FAIL, "couldn't connect to the destination")                                                                              \
+    T(CONNECTION_FAIL, "destination unreachable.")                                                                                         \
     T(FS_ERR, "fs error: error reading file.")                                                                                             \
-    T(STAT_READ_ERR, "fs error: couldn't get file stat.")                                                                                  \
+    T(STAT_READ_ERR, "fs error: couldn't get file stats.")                                                                                 \
     T(ALLOC_ERR, "memory allocation failed.")                                                                                              \
     T(BAD_ARGS_ERR, "bad arguments.")                                                                                                      \
     T(DST_ADD_ERR, "specified address contains characters representing a non-valid address in the specified address family")               \
@@ -92,10 +91,10 @@ int main(int argc, char **argv)
     if (connect(sd, (struct sockaddr *)&dst_addr, sizeof(dst_addr)))
         TFAIL(CONNECTION_FAIL);
 
-    printf("sending: name: %s (%d), size: %zu\n", argv[2], file_header.tf_name_len, file_header.tf_size);
+    printf("sending \"%s\" (%zu Bytes)...\n", argv[2], file_header.tf_size);
 
-    send(sd, &file_header, sizeof(tf_header_t), 0);
-    send(sd, argv[2], file_header.tf_name_len, 0);
+    assert(sizeof(tf_header_t) == send(sd, &file_header, sizeof(tf_header_t), 0));
+    assert(file_header.tf_name_len == send(sd, argv[2], file_header.tf_name_len, 0));
 
     printf("closeing socket fd...\n");
     close(sd);
@@ -105,7 +104,9 @@ int main(int argc, char **argv)
 exit:
     if (sd > 0)
         close(sd);
+    if (file)
+        fclose(file);
 
-    dprintf(2, "exit: %s\n", err_msg[terr]);
+    fprintf(stderr, "exit: %s\n", err_msg[terr]);
     exit(1);
 }
