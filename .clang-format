@@ -25,7 +25,7 @@ AlwaysBreakAfterDefinitionReturnType: None
 AlwaysBreakAfterReturnType: None
 AlwaysBreakBeforeMultilineStrings: No
 AlwaysBreakTemplateDeclarations: No
-AlignEscapedNewlines: Right
+AlignEscapedNewlines: Left
 BinPackArguments: true
 BraceWrapping:
   AfterClass:      true

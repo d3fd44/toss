@@ -15,17 +15,25 @@
 #define OK    1
 
 // propably overkill. just wanna be cool lol.
-#define ERRORS(T)                                                                                                                          \
-    T(ALLOC_ERR, "memory allocation failed.")                                                                                              \
-    T(BAD_ARGS_ERR, "bad arguments.")                                                                                                      \
-    T(CONNECTION_FAIL, "destination unreachable.")                                                                                         \
-    T(FS_ERR, "fs error: error reading file.")                                                                                             \
-    T(INVALID_ADDR, "specified address contains characters representing a non-valid address in the specified address family")              \
-    T(INVALID_HOST, "invalid port number.")                                                                                                \
-    T(SOCK_DESC_ERR, "socket error: couldn't initialize file descriptor.")                                                                 \
-    T(STAT_READ_ERR, "fs error: couldn't get file stats.")                                                                                 \
-    T(UNHANDLED_ERR, "wtf")                                                                                                                \
+#define ERRORS(T)                                                                                                             \
+    T(ALLOC_ERR, "memory allocation failed.")                                                                                 \
+    T(BAD_ARGS_ERR, "bad arguments.")                                                                                         \
+    T(CONNECTION_FAIL, "destination unreachable.")                                                                            \
+    T(FS_ERR, "fs error: error reading file.")                                                                                \
+    T(INVALID_ADDR, "specified address contains characters representing a non-valid address in the specified address family") \
+    T(INVALID_HOST, "invalid port number.")                                                                                   \
+    T(SOCK_DESC_ERR, "socket error: couldn't initialize file descriptor.")                                                    \
+    T(STAT_READ_ERR, "fs error: couldn't get file stats.")                                                                    \
+    T(UNHANDLED_ERR, "wtf")                                                                                                   \
     T(UNSUPPORTED_AF, "unsupported address family (IPv4 only).")
+
+#define PRINT_USAGE()                               \
+    printf("usage: toss <options> <path-to-file>\n" \
+           "options:\n"                             \
+           "    -s, --send    <destination-ip>\n"   \
+           "    -r, --receive <bind-ip>\n"          \
+           "    -p, --port    <port-number>\n"      \
+           "    -h, --help\n\n")
 
 typedef enum
 {
@@ -51,18 +59,17 @@ typedef struct
     terr_t             err;
 } targs_t;
 
-// static terr_t terr = -1;
 const char *err_msg[] = {
 #define T(err, errmsg) [err] = errmsg,
     ERRORS(T)
 #undef T
 };
 
-#define TFAIL(code)                                                                                                                        \
-    do                                                                                                                                     \
-    {                                                                                                                                      \
-        targs.err = (code);                                                                                                                \
-        goto exit;                                                                                                                         \
+#define TFAIL(code)         \
+    do                      \
+    {                       \
+        targs.err = (code); \
+        goto exit;          \
     } while (0)
 
 // my first argument parser, dam it feels kinda tricky. inspired by raysan's simple parser:
@@ -202,24 +209,13 @@ int main(int argc, char **argv)
 
     if (targs.err != NO_ERR)
     {
-        printf("usage: toss [<options>] <path-to-file>\n"
-               "options:\n"
-               "    -s, --send    <destination-ip>\n"
-               "    -r, --receive <bind-ip>\n"
-               "    -p, --port    <port-number>\n"
-               "    -h, --help\n\n");
+        PRINT_USAGE();
         TFAIL(targs.err);
     }
 
     if (targs.print_usage == true)
     {
-        // repeated
-        printf("usage: toss [<options>] <path-to-file>\n"
-               "options:\n"
-               "    -s, --send    <destination-ip>\n"
-               "    -r, --receive <bind-ip>\n"
-               "    -p, --port    <port-number>\n"
-               "    -h, --help\n\n");
+        PRINT_USAGE();
         return 0;
     }
 
@@ -258,7 +254,7 @@ int main(int argc, char **argv)
         assert(read_count == send(sd, buf, read_count, 0));
     }
 
-    printf("closing socket fd...\n");
+    printf("closing socket fd... ");
     fclose(file);
     close(sd);
     printf("done.\n");
