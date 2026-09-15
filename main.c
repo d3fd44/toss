@@ -51,8 +51,8 @@ typedef struct
     terr_t             err;
 } targs_t;
 
-static terr_t terr = -1;
-const char   *err_msg[] = {
+// static terr_t terr = -1;
+const char *err_msg[] = {
 #define T(err, errmsg) [err] = errmsg,
     ERRORS(T)
 #undef T
@@ -61,7 +61,7 @@ const char   *err_msg[] = {
 #define TFAIL(code)                                                                                                                        \
     do                                                                                                                                     \
     {                                                                                                                                      \
-        terr = (code);                                                                                                                     \
+        targs.err = (code);                                                                                                                \
         goto exit;                                                                                                                         \
     } while (0)
 
@@ -272,6 +272,6 @@ exit:
     // if (sd > 0)
     //     close(sd);
 
-    fprintf(stderr, "exit: %s\n", err_msg[terr]);
+    fprintf(stderr, "exit: %s\n", err_msg[targs.err]);
     exit(1);
 }
