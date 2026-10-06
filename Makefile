@@ -13,6 +13,7 @@ default:
 run: default
 	@printf "running test\n"
 	nc -l $(BND) $(PRT) > $(TMP) &
+	@sleep 0.25
 	./$(OUT) -s $(DST) -p $(PRT) $(SRC)
 	@printf "%s received\n" "$$(wc -c < $(TMP))"
 	@printf "%s actual size\n" "$$(wc -c < $(SRC))"
