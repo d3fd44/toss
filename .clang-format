@@ -30,10 +30,10 @@ BinPackArguments: true
 BraceWrapping:
   AfterClass:      true
   AfterControlStatement: true
-  AfterEnum:       true
+  AfterEnum:       false
   AfterFunction:   true
   AfterObjCDeclaration: false
-  AfterStruct:     true
+  AfterStruct:     false
   AfterUnion:      true
   BeforeCatch:     true
   BeforeElse:      true
