@@ -14,6 +14,20 @@
 #define TRECV 1
 #define OK    1
 
+uint64_t thtonll(uint64_t x)  // there's not htonll :(
+{
+    uint16_t one = 1;
+    uint8_t  first_byte;
+    memcpy(&first_byte, &one, 1);
+
+    if (first_byte == 1)  // check endianness
+        return ((uint64_t)htonl((uint32_t)x) << 32) | htonl((uint32_t)(x >> 32));
+
+    return x;
+}
+
+#define TO_NETWORK(x) _Generic((x), uint16_t: htons, uint32_t: htonl, uint64_t: thtonll)(x)
+
 // propably overkill. just wanna be cool lol.
 #define ERRORS(T)                                                                                                             \
     T(ALLOC_ERR, "memory allocation failed.")                                                                                 \
@@ -35,22 +49,31 @@
            "    -p, --port    <port-number>\n"      \
            "    -h, --help\n\n")
 
-typedef enum
-{
+#define T_HEADER_MEMBERS     \
+    T(uint32_t, tf_name_len) \
+    T(uint64_t, tf_size)
+
+typedef struct {
+#define T(type, name) type name;
+    T_HEADER_MEMBERS
+#undef T
+} tf_header_t;
+
+enum {
+    T_HEADER_SIZE = 0
+#define T(type, _) +sizeof(type)
+    T_HEADER_MEMBERS
+#undef T
+};
+
+typedef enum {
     NO_ERR,
 #define T(err, errmsg) err,
     ERRORS(T)
 #undef T
 } terr_t;
 
-typedef struct
-{
-    uint32_t tf_name_len;
-    uint64_t tf_size;
-} tf_header_t;
-
-typedef struct
-{
+typedef struct {
     bool               print_usage;
     bool               mode;
     char              *file_path, *file_name;
@@ -202,6 +225,33 @@ void process_args(int argc, char **argv, targs_t *targs)
     targs->mode = mode;
 }
 
+uint8_t toss_header(int socket_fd, tf_header_t header)
+{
+    uint8_t buffer[T_HEADER_SIZE] = { 0 };
+    size_t  i = 0;
+
+    // header serialization
+#define T(type, name)                               \
+    type temp_##name = TO_NETWORK(header.name);     \
+    memcpy(buffer + i, &temp_##name, sizeof(type)); \
+    i += sizeof(type);
+    T_HEADER_MEMBERS
+#undef T
+
+    if (send(socket_fd, buffer, T_HEADER_SIZE, 0) != T_HEADER_SIZE)
+    {
+        fprintf(stderr, "error sending header\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+uint8_t toss_file()  // todo
+{
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     targs_t targs;
@@ -243,9 +293,8 @@ int main(int argc, char **argv)
 
     printf("sending \"%s\" (%zu Bytes)...\n", targs.file_path, file_header.tf_size);
 
-    assert(sizeof(tf_header_t) == send(sd, &file_header, sizeof(tf_header_t), 0));
-    assert(file_header.tf_name_len == send(sd, targs.file_name, file_header.tf_name_len, 0));
-
+    toss_header(sd, file_header);
+    /* todo: toss_file (file name, the file itself, etc */
     char buf[1024] = { 0 };
 
     for (size_t i = 0; i < (targs.file_stat.st_size / _Countof(buf)) + 1; i++)
