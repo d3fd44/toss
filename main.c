@@ -14,7 +14,7 @@
 #define TRECV 1
 #define OK    1
 
-uint64_t thtonll(uint64_t x)  // there's not htonll :(
+uint64_t thtonll(uint64_t x)  // there's no htonll :(
 {
     uint16_t one = 1;
     uint8_t  first_byte;
@@ -49,20 +49,20 @@ uint64_t thtonll(uint64_t x)  // there's not htonll :(
            "    -p, --port    <port-number>\n"      \
            "    -h, --help\n\n")
 
-#define T_HEADER_MEMBERS     \
-    T(uint32_t, tf_name_len) \
-    T(uint64_t, tf_size)
+#define HEADER_MEMBERS         \
+    T(uint32_t, file_name_len) \
+    T(uint64_t, file_size)
 
 typedef struct {
 #define T(type, name) type name;
-    T_HEADER_MEMBERS
+    HEADER_MEMBERS
 #undef T
-} tf_header_t;
+} theader_t;  // tee-header
 
 enum {
-    T_HEADER_SIZE = 0
+    THEADER_SIZE = 0
 #define T(type, _) +sizeof(type)
-    T_HEADER_MEMBERS
+    HEADER_MEMBERS
 #undef T
 };
 
@@ -88,6 +88,7 @@ const char *err_msg[] = {
 #undef T
 };
 
+// leave for now, i wanna reconsider error handling
 #define TFAIL(code)         \
     do                      \
     {                       \
@@ -225,9 +226,9 @@ void process_args(int argc, char **argv, targs_t *targs)
     targs->mode = mode;
 }
 
-uint8_t toss_header(int socket_fd, tf_header_t header)
+uint8_t toss_header(int socket_fd, theader_t header)
 {
-    uint8_t buffer[T_HEADER_SIZE] = { 0 };
+    uint8_t buffer[THEADER_SIZE] = { 0 };
     size_t  i = 0;
 
     // header serialization
@@ -235,10 +236,10 @@ uint8_t toss_header(int socket_fd, tf_header_t header)
     type temp_##name = TO_NETWORK(header.name);     \
     memcpy(buffer + i, &temp_##name, sizeof(type)); \
     i += sizeof(type);
-    T_HEADER_MEMBERS
+    HEADER_MEMBERS
 #undef T
 
-    if (send(socket_fd, buffer, T_HEADER_SIZE, 0) != T_HEADER_SIZE)
+    if (send(socket_fd, buffer, THEADER_SIZE, 0) != THEADER_SIZE)
     {
         fprintf(stderr, "error sending header\n");
         return 1;
@@ -272,14 +273,14 @@ int main(int argc, char **argv)
     char in_buf[INET_ADDRSTRLEN];
 
     // construct a message header
-    tf_header_t file_header;
+    theader_t file_header;
 
     FILE *file = fopen(targs.file_path, "r");
     if (!file)
         TFAIL(FS_ERR);
 
-    file_header.tf_name_len = strlen(targs.file_name);
-    file_header.tf_size = targs.file_stat.st_size;
+    file_header.file_name_len = strlen(targs.file_name);
+    file_header.file_size = targs.file_stat.st_size;
 
     int sd = socket(AF_INET, SOCK_STREAM, 0);
     if (sd == -1)
@@ -291,7 +292,7 @@ int main(int argc, char **argv)
         TFAIL(CONNECTION_FAIL);
     }
 
-    printf("sending \"%s\" (%zu Bytes)...\n", targs.file_path, file_header.tf_size);
+    printf("sending \"%s\" (%zu Bytes)...\n", targs.file_path, file_header.file_size);
 
     toss_header(sd, file_header);
     /* todo: toss_file (file name, the file itself, etc */
