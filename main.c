@@ -10,11 +10,13 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#define TSEND 0
-#define TRECV 1
-#define OK    1
+#define TSEND       1
+#define TRECV       2
+#define OK          1
 
-uint64_t thtonll(uint64_t x)  // there's no htonll :(
+#define SEND_BUFFER 1024
+
+uint64_t htonll(uint64_t x)
 {
     uint16_t one = 1;
     uint8_t  first_byte;
@@ -26,19 +28,20 @@ uint64_t thtonll(uint64_t x)  // there's no htonll :(
     return x;
 }
 
-#define TO_NETWORK(x) _Generic((x), uint16_t: htons, uint32_t: htonl, uint64_t: thtonll)(x)
+#define TO_NETWORK(x) _Generic((x), uint16_t: htons, uint32_t: htonl, uint64_t: htonll)(x)
 
 // propably overkill. just wanna be cool lol.
-#define ERRORS(T)                                                                                                             \
-    T(ALLOC_ERR, "memory allocation failed.")                                                                                 \
-    T(BAD_ARGS_ERR, "bad arguments.")                                                                                         \
-    T(CONNECTION_FAIL, "destination unreachable.")                                                                            \
-    T(FS_ERR, "fs error: error reading file.")                                                                                \
-    T(INVALID_ADDR, "specified address contains characters representing a non-valid address in the specified address family") \
-    T(INVALID_HOST, "invalid port number.")                                                                                   \
-    T(SOCK_DESC_ERR, "socket error: couldn't initialize file descriptor.")                                                    \
-    T(STAT_READ_ERR, "fs error: couldn't get file stats.")                                                                    \
-    T(UNHANDLED_ERR, "wtf")                                                                                                   \
+#define ERRORS(T)                                                                \
+    T(BAD_ARG, "bad argument.")                                                  \
+    T(CONNECTION_FAIL, "destination unreachable.")                               \
+    T(FILE_READ_FAIL, "error reading file.")                                     \
+    T(FILE_STAT_READ_FAIL, "failed to get file stats.")                          \
+    T(INVALID_ADDR, "invalid IPv4 address.")                                     \
+    T(INVALID_HOST, "invalid port number.")                                      \
+    T(MEM_ALLOC_FAIL, "memory allocation failed.")                               \
+    T(NO_DIRECTION, "please specify a transmission direction (send / receive).") \
+    T(SOCK_DESC_INIT_FAIL, "failed to initialize socket descriptor.")            \
+    T(UNHANDLED_ERR, "wtf")                                                      \
     T(UNSUPPORTED_AF, "unsupported address family (IPv4 only).")
 
 #define PRINT_USAGE()                               \
@@ -73,6 +76,12 @@ typedef enum {
 #undef T
 } terr_t;
 
+const char *err_msg[] = {
+#define T(err, errmsg) [err] = errmsg,
+    ERRORS(T)
+#undef T
+};
+
 typedef struct {
     bool               print_usage;
     bool               mode;
@@ -82,29 +91,14 @@ typedef struct {
     terr_t             err;
 } targs_t;
 
-const char *err_msg[] = {
-#define T(err, errmsg) [err] = errmsg,
-    ERRORS(T)
-#undef T
-};
-
-// leave for now, i wanna reconsider error handling
-#define TFAIL(code)         \
-    do                      \
-    {                       \
-        targs.err = (code); \
-        goto exit;          \
-    } while (0)
-
 // my first argument parser, dam it feels kinda tricky. inspired by raysan's simple parser:
 // https://github.com/raysan5/rfxgen/blob/3185a36277226243695169da1e0d8d4aedde6f50/src/rfxgen.c#L1125
 // error handling works, but sucks. i mean it is good, but the reporting sucks
 void process_args(int argc, char **argv, targs_t *targs)
 {
-    bool  print_usage = false;
-    bool  mode;
-    char *inet = { 0 };
-    int   host = 12345;
+    bool    print_usage = false;
+    int     host = 12345;
+    uint8_t mode = 0;
 
     char *path = { 0 };
     char *file_name = { 0 };
@@ -129,7 +123,7 @@ void process_args(int argc, char **argv, targs_t *targs)
             {
                 switch (inet_pton(AF_INET, argv[i + 1], &targs->dst_addr.sin_addr))
                 {
-                    case -1:
+                    case -1:  // impossible, since af (arg[0]) is hardcoded.
                         targs->err = UNSUPPORTED_AF;
                         return;
                     case 0:
@@ -145,8 +139,8 @@ void process_args(int argc, char **argv, targs_t *targs)
             }
             else
             {
-                printf("error parsing address after \"-s | --send\"\n");
-                targs->err = INVALID_ADDR;
+                printf("failed to parse '%s'.\n", argv[i]);
+                targs->err = BAD_ARG;
                 return;
             }
         }
@@ -157,7 +151,7 @@ void process_args(int argc, char **argv, targs_t *targs)
             {
                 switch (inet_pton(AF_INET, argv[i + 1], &targs->dst_addr.sin_addr))
                 {
-                    case -1:
+                    case -1:  // same as above
                         targs->err = UNSUPPORTED_AF;
                         return;
                     case 0:
@@ -173,8 +167,8 @@ void process_args(int argc, char **argv, targs_t *targs)
             }
             else
             {
-                printf("error parsing address after \"-r | --receive\"\n");
-                targs->err = INVALID_ADDR;
+                printf("failed to parse '%s'.\n", argv[i]);
+                targs->err = BAD_ARG;
                 return;
             }
         }
@@ -196,7 +190,7 @@ void process_args(int argc, char **argv, targs_t *targs)
             }
             else
             {
-                printf("error parsing port number after \"-p | --port\"\n");
+                printf("failed to parse '%s'.\n", argv[i]);
                 targs->err = INVALID_HOST;
                 return;
             }
@@ -205,8 +199,7 @@ void process_args(int argc, char **argv, targs_t *targs)
         {
             if (stat(argv[i], &targs->file_stat))
             {
-                printf("%s\n", argv[i]);
-                targs->err = STAT_READ_ERR;
+                targs->err = FILE_STAT_READ_FAIL;
                 return;
             }
             targs->file_path = argv[i];
@@ -215,9 +208,15 @@ void process_args(int argc, char **argv, targs_t *targs)
         else
         {
             printf("unknown argument: %s\n", argv[i]);
-            targs->err = BAD_ARGS_ERR;
+            targs->err = BAD_ARG;
             return;
         }
+    }
+
+    if (mode == 0)
+    {
+        targs->err = NO_DIRECTION;
+        return;
     }
 
     targs->err = NO_ERR;
@@ -248,21 +247,35 @@ uint8_t toss_header(int socket_fd, theader_t header)
     return 0;
 }
 
-uint8_t toss_file()  // todo
+uint8_t toss_file(int sd, char *filename, FILE *file, uint64_t size)
 {
+    assert(strlen(filename) == send(sd, filename, strlen(filename), 0));
+
+    char buf[SEND_BUFFER] = { 0 };
+
+    for (size_t i = 0; i < (size / _Countof(buf)) + 1; i++)
+    {
+        int read_count = fread(buf, 1, _Countof(buf), file);
+        assert(read_count == send(sd, buf, read_count, 0));
+    }
     return 0;
+}
+
+void toss_exit(uint8_t code)
+{
+    fprintf(stderr, "exit: %s\n", err_msg[code]);
+    exit(1);
 }
 
 int main(int argc, char **argv)
 {
     targs_t targs;
+    FILE   *file = NULL;
+    int     sd = -1;
     process_args(argc, argv, &targs);
 
     if (targs.err != NO_ERR)
-    {
-        PRINT_USAGE();
-        TFAIL(targs.err);
-    }
+        toss_exit(targs.err);
 
     if (targs.print_usage == true)
     {
@@ -275,49 +288,36 @@ int main(int argc, char **argv)
     // construct a message header
     theader_t file_header;
 
-    FILE *file = fopen(targs.file_path, "r");
+    file = fopen(targs.file_path, "r");
     if (!file)
-        TFAIL(FS_ERR);
+        toss_exit(FILE_READ_FAIL);
 
     file_header.file_name_len = strlen(targs.file_name);
     file_header.file_size = targs.file_stat.st_size;
 
-    int sd = socket(AF_INET, SOCK_STREAM, 0);
+    sd = socket(AF_INET, SOCK_STREAM, 0);
     if (sd == -1)
-        TFAIL(SOCK_DESC_ERR);
+    {
+        fclose(file);
+        toss_exit(SOCK_DESC_INIT_FAIL);
+    }
 
     if (connect(sd, (struct sockaddr *)&targs.dst_addr, sizeof(targs.dst_addr)))
     {
-        perror("smth\n");
-        TFAIL(CONNECTION_FAIL);
+        fclose(file);
+        toss_exit(CONNECTION_FAIL);
     }
 
-    printf("sending \"%s\" (%zu Bytes)...\n", targs.file_path, file_header.file_size);
+    printf("sending \"%s\" %zu bytes + %d bytes header + %zu bytes name_len (%ld bytes total)...\n", targs.file_path,
+           targs.file_stat.st_size, THEADER_SIZE, strlen(targs.file_name),
+           strlen(targs.file_name) + THEADER_SIZE + targs.file_stat.st_size);
 
     toss_header(sd, file_header);
-    /* todo: toss_file (file name, the file itself, etc */
-    char buf[1024] = { 0 };
+    toss_file(sd, targs.file_name, file, targs.file_stat.st_size);
 
-    for (size_t i = 0; i < (targs.file_stat.st_size / _Countof(buf)) + 1; i++)
-    {
-        int read_count = fread(buf, 1, _Countof(buf), file);
-        assert(read_count == send(sd, buf, read_count, 0));
-    }
-
-    printf("closing socket fd... ");
+    printf("done.\n");
     fclose(file);
     close(sd);
-    printf("done.\n");
+
     return 0;
-
-exit:
-    // this segfaulted lol (i think it's bc we might jump here before even defining file or sd).
-    // idk man, my error handling looks cool but feels suck :(
-    // if (file)
-    //     fclose(file);
-    // if (sd > 0)
-    //     close(sd);
-
-    fprintf(stderr, "exit: %s\n", err_msg[targs.err]);
-    exit(1);
 }
