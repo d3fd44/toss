@@ -1,4 +1,5 @@
 CC        = gcc
+FLAGS     = -Wall -Wextra
 SRC       = main.c
 TARGET    = toss
 DST_ADDR  = 127.0.0.1
@@ -12,7 +13,7 @@ FSIZE     = 8 # uint64_t
 
 default:
 	@printf "=> building...\n"
-	@$(CC) -o $(TARGET) $(SRC)
+	@$(CC) $(FLAGS) -o $(TARGET) $(SRC)
 	@printf "=> done.\n"
 
 run: default
