@@ -100,9 +100,6 @@ void process_args(int argc, char **argv, targs_t *targs)
     int     host = 12345;
     uint8_t mode = 0;
 
-    char *path = { 0 };
-    char *file_name = { 0 };
-
     if (argc == 1)
         print_usage = true;
 
@@ -282,8 +279,6 @@ int main(int argc, char **argv)
         PRINT_USAGE();
         return 0;
     }
-
-    char in_buf[INET_ADDRSTRLEN];
 
     // construct a message header
     theader_t file_header;
