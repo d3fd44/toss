@@ -1,25 +1,39 @@
-CC  = gcc
-SRC = main.c
-OUT = toss
-DST = 127.0.0.1
-BND = 0.0.0.0
-PRT = 12345
-TMP = /tmp/toss-received
+CC        = gcc
+SRC       = main.c
+TARGET    = toss
+DST_ADDR  = 127.0.0.1
+BIND_ADDR = 0.0.0.0
+HOST      = 12345
+INPUT     = ./Makefile
+TMP       = /tmp/toss-received
+
+FNAME_LEN = 4 # uint32_t
+FSIZE     = 8 # uint64_t
 
 default:
-	@printf "building...\n"
-	$(CC) -o $(OUT) $(SRC)
+	@printf "=> building...\n"
+	@$(CC) -o $(TARGET) $(SRC)
+	@printf "=> done.\n"
 
 run: default
-	@printf "running test\n"
-	nc -l $(BND) $(PRT) > $(TMP) &
+	@printf "=> running test...\n"
+	@nc -l $(BIND_ADDR) $(HOST) > $(TMP) &
 	@sleep 0.25
-	./$(OUT) -s $(DST) -p $(PRT) $(SRC)
-	@printf "%s received\n" "$$(wc -c < $(TMP))"
-	@printf "%s actual size\n" "$$(wc -c < $(SRC))"
+	./$(TARGET) --send $(DST_ADDR) --port $(HOST) $(INPUT)
+	@printf "%s received\n" "$$(wc -c < $(TMP)) bytes"
+
+	@input=$(INPUT);                                                                                                           \
+     name=$${input##*/};                                                                                                       \
+     if [ $$(wc -c < $(TMP)) -eq $$(( $$(wc -c < $(INPUT)) + $(FNAME_LEN) + $$(echo -n "$$name" | wc -c) + $(FSIZE) )) ]; then \
+         echo "=> success.";                                                                                                   \
+     else                                                                                                                      \
+         echo "=> failed.";                                                                                                    \
+     fi
 
 ins:
-	xxd -g 1 -R always $(TMP) | bat
+	@printf "=> running inspect on $(TMP)...\n"
+	@xxd -g 1 -R always $(TMP) | bat
+	@printf "=> done.\n"
 
 clean:
-	rm -f $(OUT) $(TMP)
+	rm -f $(TARGET) $(TMP)
