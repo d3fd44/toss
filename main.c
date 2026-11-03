@@ -84,7 +84,7 @@ const char *err_msg[] = {
 
 typedef struct {
     bool               print_usage;
-    bool               mode;
+    uint8_t            mode;
     char              *file_path, *file_name;
     struct stat        file_stat;
     struct sockaddr_in dst_addr;
