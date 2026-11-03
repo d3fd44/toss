@@ -127,6 +127,7 @@ void process_args(int argc, char **argv, targs_t *targs)
                         targs->err = UNSUPPORTED_AF;
                         return;
                     case 0:
+                        printf("failed to parse '%s'.\n", argv[i + 1]);
                         targs->err = INVALID_ADDR;
                         return;
                     case OK:
@@ -139,7 +140,6 @@ void process_args(int argc, char **argv, targs_t *targs)
             }
             else
             {
-                printf("failed to parse '%s'.\n", argv[i]);
                 targs->err = BAD_ARG;
                 return;
             }
@@ -155,6 +155,7 @@ void process_args(int argc, char **argv, targs_t *targs)
                         targs->err = UNSUPPORTED_AF;
                         return;
                     case 0:
+                        printf("failed to parse '%s'.\n", argv[i + 1]);
                         targs->err = INVALID_ADDR;
                         return;
                     case OK:
@@ -167,7 +168,6 @@ void process_args(int argc, char **argv, targs_t *targs)
             }
             else
             {
-                printf("failed to parse '%s'.\n", argv[i]);
                 targs->err = BAD_ARG;
                 return;
             }
@@ -181,6 +181,7 @@ void process_args(int argc, char **argv, targs_t *targs)
 
                 if (errno == ERANGE || end == argv[i + 1] || *end != '\0')
                 {
+                    printf("failed to parse '%s'.\n", argv[i + 1]);
                     targs->err = INVALID_HOST;
                     return;
                 }
@@ -190,7 +191,6 @@ void process_args(int argc, char **argv, targs_t *targs)
             }
             else
             {
-                printf("failed to parse '%s'.\n", argv[i]);
                 targs->err = INVALID_HOST;
                 return;
             }
